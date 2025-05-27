@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Emotion Journal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Quicksand', sans-serif;
+      background: linear-gradient(to right, #fdfbfb, #ebedee);
+      color: #444;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1 { color: #5b5f97; font-size: 2.2rem; margin-bottom: 20px; text-align: center; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.08);
+      padding: 24px;
+      width: 100%;
+      max-width: 650px;
+      margin-bottom: 24px;
+    }
+    label { font-weight: 600; display: block; margin-bottom: 8px; }
+    select, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 1rem;
+    }
+    .mood-emojis label {
+      font-size: 1.5rem;
+      margin: 0 6px;
+      cursor: pointer;
+    }
+    button {
+      background-color: #5b5f97;
+      color: #fff;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      margin-right: 10px;
+    }
+    button:hover { background-color: #424678; }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      max-width: 650px;
+      width: 100%;
+    }
+    .day {
+      background: #f0f4f8;
+      border-radius: 8px;
+      text-align: center;
+      padding: 16px 10px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .day:hover { background: #dce1f0; }
+    .entry-marked { color: white; }
+    .mood-😢 { background-color: #b0c4de !important; }
+    .mood-😐 { background-color: #d3d3d3 !important; }
+    .mood-😊 { background-color: #a8dadc !important; }
+    .mood-😁 { background-color: #fbc687 !important; }
+    .mood-🤩 { background-color: #f8a5c2 !important; }
+    #modal {
+      position: fixed;
+      top: 0; left: 0;
+      right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #modalContent {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 400px;
+      width: 90%;
+    }
+    #modal textarea { width: 100%; height: 100px; }
+    .close-btn, .delete-btn, .edit-btn, .export-btn {
+      background: #ccc;
+      margin-top: 10px;
+    }
+    #aiFeedback {
+      max-width: 650px;
+      background: #e9f0ff;
+      border-left: 6px solid #5b5f97;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      font-style: italic;
+      color: #34456d;
+      min-height: 60px;
+    }
+    @media (max-width: 600px) {
+      .calendar { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<h1>🌤️ Emotion Journal</h1>
+
+<div class="card">
+  <label for="mood">Mood Today</label>
+  <div class="mood-emojis">
+    <label><input type="radio" name="mood" value="😢"> 😢</label>
+    <label><input type="radio" name="mood" value="😐"> 😐</label>
+    <label><input type="radio" name="mood" value="😊"> 😊</label>
+    <label><input type="radio" name="mood" value="😁"> 😁</label>
+    <label><input type="radio" name="mood" value="🤩"> 🤩</label>
+  </div>
+
+  <label for="journal">Journal Entry</label>
+  <textarea id="journal" placeholder="Write your thoughts..."></textarea>
+
+  <button onclick="saveEntry()">Save Entry</button>
+  <button onclick="exportEntries()" class="export-btn">Export Entries</button>
+</div>
+
+<div id="aiFeedback">Your AI feedback will appear here after saving an entry.</div>
+
+<h2 style="margin-top: 40px;">🗓️ Your Mood Calendar</h2>
+<div class="calendar" id="calendar"></div>
+
+<div id="modal">
+  <div id="modalContent">
+    <h3 id="modalDate"></h3>
+    <textarea id="modalEntry"></textarea>
+    <button class="edit-btn" onclick="editEntry()">Edit</button>
+    <button class="delete-btn" onclick="deleteEntry()">Delete</button>
+    <button class="close-btn" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<script>
+  const calendar = document.getElementById("calendar");
+  const modal = document.getElementById("modal");
+  const modalEntry = document.getElementById("modalEntry");
+  const modalDate = document.getElementById("modalDate");
+  const aiFeedback = document.getElementById("aiFeedback");
+
+  function generateCalendar() {
+    calendar.innerHTML = '';
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${month + 1}-${day}`;
+      const entry = JSON.parse(localStorage.getItem(dateStr));
+
+      const dayDiv = document.createElement('div');
+      dayDiv.className = 'day';
+      dayDiv.innerText = day;
+      if (entry) {
+        dayDiv.classList.add('entry-marked', `mood-${entry.mood}`);
+        dayDiv.onclick = () => showEntry(dateStr);
+      }
+
+      calendar.appendChild(dayDiv);
+    }
+  }
+
+  function saveEntry() {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+    const moodInput = document.querySelector('input[name="mood"]:checked');
+    const text = document.getElementById('journal').value.trim();
+
+    if (!moodInput || !text) {
+      alert("Please select a mood and write something.");
+      return;
+    }
+
+    const entry = { mood: moodInput.value, text };
+    localStorage.setItem(dateStr, JSON.stringify(entry));
+    document.getElementById('journal').value = '';
+    clearMoodSelection();
+    generateCalendar();
+    aiFeedback.innerText = generateAIFeedback(entry.mood, entry.text);
+    alert("Entry saved!");
+  }
+
+  function clearMoodSelection() {
+    const moods = document.querySelectorAll('input[name="mood"]');
+    moods.forEach(m => m.checked = false);
+  }
+
+  let currentModalDate = "";
+
+  function showEntry(date) {
+    const entry = JSON.parse(localStorage.getItem(date));
+    if (entry) {
+      modal.style.display = "flex";
+      modalDate.innerText = `Entry for ${date}`;
+      modalEntry.value = `${entry.mood} - ${entry.text}`;
+      currentModalDate = date;
+    }
+  }
+
+  function closeModal() {
+    modal.style.display = "none";
+    modalEntry.readOnly = true;
+  }
+
+  function deleteEntry() {
+    if (confirm("Are you sure you want to delete this entry?")) {
+      localStorage.removeItem(currentModalDate);
+      closeModal();
+      generateCalendar();
+      aiFeedback.innerText = "Entry deleted.";
+    }
+  }
+
+  function editEntry() {
+    const editedText = prompt("Edit your entry:", modalEntry.value);
+    if (editedText !== null) {
+      const parts = editedText.split(" - ");
+      if(parts.length < 2) {
+        alert("Please keep format: mood - text");
+        return;
+      }
+      const mood = parts[0].trim();
+      const text = parts.slice(1).join(" - ").trim();
+      const entry = { mood, text };
+      localStorage.setItem(currentModalDate, JSON.stringify(entry));
+      closeModal();
+      generateCalendar();
+      aiFeedback.innerText = generateAIFeedback(entry.mood, entry.text);
+    }
+  }
+
+  function exportEntries() {
+    const data = { ...localStorage };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'emotion_journal_backup.json';
+    link.click();
+  }
+
+  // AI Feedback generator based on mood and text
+  function generateAIFeedback(mood, text) {
+    switch(mood) {
+      case "😢":
+        return "I'm sorry you're feeling this way. It's okay to have tough days. Remember to be kind to yourself and consider reaching out to someone you trust. Tomorrow is a new day.";
+      case "😐":
+        return "It seems like you're feeling neutral or unsure today. Sometimes just acknowledging your feelings is a good step forward. Keep an eye on what might lift your mood.";
+      case "😊":
+        return "Great to see some positivity! Keep nurturing these good moments and celebrate small wins.";
+      case "😁":
+        return "Awesome! Your happiness is infectious. Keep spreading that positive energy around.";
+      case "🤩":
+        return "You're feeling fantastic! Harness this energy to pursue your passions and inspire others.";
+      default:
+        return "Thank you for sharing your thoughts.";
+    }
+  }
+
+  window.onload = generateCalendar;
+</script>
+
+</body>
+</html>
